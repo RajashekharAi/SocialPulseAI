@@ -115,6 +115,7 @@ class MediaCollector {
       }
     } catch (error) {
       console.error(`Error fetching comments from ${platform}:`, error);
+      // Return empty array instead of mock data when there's an error
       return [];
     }
   }
@@ -127,6 +128,7 @@ class MediaCollector {
     await this.loadApiKeys();
     const YOUTUBE_API_KEY = this.apiKeys.youtube || process.env.YOUTUBE_API_KEY;
     
+    // Only use mock data if API key is not configured
     if (!YOUTUBE_API_KEY) {
       console.error("YouTube API key is not configured");
       return this.createCommentsData("YouTube", keywords[0], timeperiod);
@@ -153,7 +155,8 @@ class MediaCollector {
         // If the API key is invalid or quota is exceeded, fall back to sample data
         if (videoSearchResponse.status === 403) {
           console.error("YouTube API returned Forbidden (403). Your API key may be invalid, restricted, or the quota might be exceeded.");
-          return this.createCommentsData("YouTube", keywords[0], timeperiod);
+          // Return empty array instead of mock data
+          return [];
         }
         
         throw new Error(`YouTube API error: ${videoSearchResponse.statusText}`);
@@ -163,7 +166,8 @@ class MediaCollector {
       
       if (!videoSearchData.items || videoSearchData.items.length === 0) {
         console.log(`No videos found for keyword: ${keyword}`);
-        return this.createCommentsData("YouTube", keywords[0], timeperiod);
+        // Return empty array with no mock data since API key is configured but no data found
+        return [];
       }
       
       const videoIds = videoSearchData.items.map((item: any) => item.id.videoId);
@@ -215,18 +219,18 @@ class MediaCollector {
         }
       }
       
-      // If we couldn't get any comments from the API, use sample data
+      // If we couldn't get any comments from the API, don't use mock data
       if (comments.length === 0) {
-        console.log("No comments collected from YouTube API, using sample data");
-        return this.createCommentsData("YouTube", keywords[0], timeperiod);
+        console.log("No comments collected from YouTube API for the given filters");
+        return [];
       }
       
       console.log(`Successfully collected ${comments.length} comments from YouTube`);
       return comments;
     } catch (error) {
       console.error("Error fetching data from YouTube API:", error);
-      // Always fall back to sample data on any error
-      return this.createCommentsData("YouTube", keywords[0], timeperiod);
+      // Don't fall back to sample data when there's an error if key is configured
+      return [];
     }
   }
   
@@ -238,6 +242,7 @@ class MediaCollector {
     await this.loadApiKeys();
     const TWITTER_BEARER_TOKEN = this.apiKeys.twitter || process.env.TWITTER_BEARER_TOKEN;
     
+    // Only use mock data if API key is not configured
     if (!TWITTER_BEARER_TOKEN) {
       console.error("Twitter API token is not configured");
       return this.createCommentsData("Twitter (X)", keywords[0], timeperiod);
@@ -262,10 +267,18 @@ class MediaCollector {
       });
       
       if (!response.ok) {
-        throw new Error(`Twitter API error: ${response.statusText}`);
+        console.error(`Twitter API error: ${response.status} ${response.statusText}`);
+        // Don't fall back to mock data for API errors when key is configured
+        return [];
       }
       
       const data = await response.json();
+      
+      // If no tweets found, return empty array with no mock data
+      if (!data.data || data.data.length === 0) {
+        console.log(`No tweets found for keyword: ${keyword}`);
+        return [];
+      }
       
       // Create a map of user IDs to user data
       const users = new Map();
@@ -296,10 +309,12 @@ class MediaCollector {
         });
       }
       
+      console.log(`Successfully collected ${comments.length} comments from Twitter`);
       return comments;
     } catch (error) {
       console.error("Error fetching data from Twitter API:", error);
-      return this.createCommentsData("Twitter (X)", keywords[0], timeperiod);
+      // Don't use mock data for errors when key is configured
+      return [];
     }
   }
   
@@ -311,6 +326,7 @@ class MediaCollector {
     await this.loadApiKeys();
     const FACEBOOK_ACCESS_TOKEN = this.apiKeys.facebook || process.env.FACEBOOK_ACCESS_TOKEN;
     
+    // Only use mock data if API key is not configured
     if (!FACEBOOK_ACCESS_TOKEN) {
       console.error("Facebook API token is not configured");
       return this.createCommentsData("Facebook", keywords[0], timeperiod);
@@ -329,10 +345,18 @@ class MediaCollector {
       const searchResponse = await fetch(searchUrl);
       
       if (!searchResponse.ok) {
-        throw new Error(`Facebook API error: ${searchResponse.statusText}`);
+        console.error(`Facebook API error: ${searchResponse.status} ${searchResponse.statusText}`);
+        // Don't use mock data for API errors
+        return [];
       }
       
       const searchData = await searchResponse.json();
+      
+      // If no posts found, return empty array with no mock data
+      if (!searchData.data || searchData.data.length === 0) {
+        console.log(`No posts found for keyword: ${keyword}`);
+        return [];
+      }
       
       // For each post, get the comments
       for (const post of searchData.data || []) {
@@ -367,10 +391,18 @@ class MediaCollector {
         }
       }
       
+      // If we couldn't get any comments, don't use mock data
+      if (comments.length === 0) {
+        console.log("No comments collected from Facebook for the given filters");
+        return [];
+      }
+      
+      console.log(`Successfully collected ${comments.length} comments from Facebook`);
       return comments;
     } catch (error) {
       console.error("Error fetching data from Facebook API:", error);
-      return this.createCommentsData("Facebook", keywords[0], timeperiod);
+      // Don't fall back to mock data on error
+      return [];
     }
   }
   
@@ -382,6 +414,7 @@ class MediaCollector {
     await this.loadApiKeys();
     const INSTAGRAM_ACCESS_TOKEN = this.apiKeys.instagram || process.env.INSTAGRAM_ACCESS_TOKEN;
     
+    // Only use mock data if API key is not configured
     if (!INSTAGRAM_ACCESS_TOKEN) {
       console.error("Instagram API token is not configured");
       return this.createCommentsData("Instagram", keywords[0], timeperiod);
@@ -401,14 +434,17 @@ class MediaCollector {
       const hashtagResponse = await fetch(hashtagUrl);
       
       if (!hashtagResponse.ok) {
-        throw new Error(`Instagram API error: ${hashtagResponse.statusText}`);
+        console.error(`Instagram API error: ${hashtagResponse.status} ${hashtagResponse.statusText}`);
+        // Don't use mock data for API errors
+        return [];
       }
       
       const hashtagData = await hashtagResponse.json();
       
       if (!hashtagData.data || hashtagData.data.length === 0) {
         console.warn(`No hashtag found for ${hashtagSearch}`);
-        return this.createCommentsData("Instagram", keywords[0], timeperiod);
+        // Don't use mock data when API key is configured but no matching hashtags found
+        return [];
       }
       
       const hashtagId = hashtagData.data[0].id;
@@ -419,10 +455,18 @@ class MediaCollector {
       const mediaResponse = await fetch(mediaUrl);
       
       if (!mediaResponse.ok) {
-        throw new Error(`Instagram API error: ${mediaResponse.statusText}`);
+        console.error(`Instagram API error: ${mediaResponse.status} ${mediaResponse.statusText}`);
+        // Don't use mock data for API errors
+        return [];
       }
       
       const mediaData = await mediaResponse.json();
+      
+      // If no media found, return empty array
+      if (!mediaData.data || mediaData.data.length === 0) {
+        console.log(`No media found for hashtag: ${hashtagSearch}`);
+        return [];
+      }
       
       // For each media, get the comments
       for (const media of mediaData.data || []) {
@@ -457,10 +501,18 @@ class MediaCollector {
         }
       }
       
+      // If we couldn't get any comments, don't use mock data
+      if (comments.length === 0) {
+        console.log("No comments collected from Instagram for the given filters");
+        return [];
+      }
+      
+      console.log(`Successfully collected ${comments.length} comments from Instagram`);
       return comments;
     } catch (error) {
       console.error("Error fetching data from Instagram API:", error);
-      return this.createCommentsData("Instagram", keywords[0], timeperiod);
+      // Don't fall back to mock data on error
+      return [];
     }
   }
   

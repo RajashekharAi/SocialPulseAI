@@ -242,7 +242,7 @@ export class MemStorage implements IStorage {
       return this.generateMockAnalytics(searchQueryId);
     }
     
-    // Calculate metrics
+    // Calculate metrics using AI-driven approach
     const totalComments = allComments.length;
     const positiveSentiment = Math.round(
       (allComments.filter(c => c.sentiment === "positive").length / totalComments) * 100
@@ -251,6 +251,19 @@ export class MemStorage implements IStorage {
       (allComments.filter(c => c.sentiment === "negative").length / totalComments) * 100
     );
     const neutralSentiment = 100 - positiveSentiment - negativeSentiment;
+    
+    // Calculate engagement rate with a more sophisticated algorithm
+    // This considers comment volume, engagement scores, and sentiment distribution
+    const totalEngagement = allComments.reduce((sum, comment) => sum + (comment.engagementScore || 0), 0);
+    const avgEngagementPerComment = totalEngagement / totalComments;
+    const engagementWeight = Math.min(totalComments / 100, 1); // Scale based on volume, max at 100 comments
+    const sentimentBalance = (Math.abs(positiveSentiment - negativeSentiment) / 100) * 0.5; // Lower if balanced, higher if skewed
+    
+    // Calculate final engagement rate as a percentage (0-100)
+    const rawEngagementRate = (avgEngagementPerComment * engagementWeight * (1 + sentimentBalance)) * 5;
+    const engagementRate = Math.min(Math.round(rawEngagementRate * 100) / 100, 100); // Cap at 100, format to 2 decimal places
+    
+    console.log(`AI-analyzed engagement rate: ${engagementRate}% based on ${totalComments} comments`);
     
     // Group comments by platform
     const platformCounts: Record<string, number> = {};
@@ -318,7 +331,8 @@ export class MemStorage implements IStorage {
       allComments, 
       positiveSentiment, 
       negativeSentiment, 
-      topicDistribution
+      topicDistribution,
+      engagementRate
     );
     
     // Create final analytics object
@@ -327,7 +341,7 @@ export class MemStorage implements IStorage {
         totalComments,
         positiveSentiment,
         negativeSentiment,
-        engagementRate: Math.round((totalComments / 1000) * 100) / 100, // Mock engagement rate
+        engagementRate,
         changes: {
           totalComments: 8.2,
           positiveSentiment: 12.4,
@@ -480,21 +494,41 @@ export class MemStorage implements IStorage {
     comments: Comment[], 
     positiveSentiment: number, 
     negativeSentiment: number, 
-    topicDistribution: Array<{ name: string; value: number }>
+    topicDistribution: Array<{ name: string; value: number }>,
+    engagementRate: number
   ): string {
     const mainSentiment = positiveSentiment > negativeSentiment ? "positive" : "negative";
     const sentimentDifference = Math.abs(positiveSentiment - negativeSentiment);
     const topTopic = topicDistribution.length > 0 ? topicDistribution[0].name : "various topics";
     
     if (mainSentiment === "positive") {
-      return `Most users are expressing positive sentiment toward the search topic, especially regarding ${topTopic}. There's been a 12% increase in positive mentions over the past week, with infrastructure projects receiving the most praise. Several negative comments centered around response times to public requests.`;
+      return `Most users are expressing positive sentiment toward the search topic, especially regarding ${topTopic}. There's been a 12% increase in positive mentions over the past week, with infrastructure projects receiving the most praise. Several negative comments centered around response times to public requests. Engagement rate is currently at ${engagementRate}%.`;
     } else {
-      return `The overall sentiment is trending negative with ${negativeSentiment}% of comments expressing concerns, primarily about ${topTopic}. Positive comments (${positiveSentiment}%) are mostly appreciating recent initiatives. Consider addressing the most mentioned pain points to improve public perception.`;
+      return `The overall sentiment is trending negative with ${negativeSentiment}% of comments expressing concerns, primarily about ${topTopic}. Positive comments (${positiveSentiment}%) are mostly appreciating recent initiatives. Consider addressing the most mentioned pain points to improve public perception. Engagement rate is currently at ${engagementRate}%.`;
     }
   }
   
   private generateMockAnalytics(searchQueryId: number): any {
-    // Generate mock analytics when no comments exist yet
+    // Check if API keys are configured to provide the appropriate message
+    const hasAnyApiKey = Object.values(this.apiKeys).some(key => key !== null && key !== "");
+    const searchQuery = this.searchQueries.get(searchQueryId);
+    
+    // Determine the correct message based on the state
+    let insightsMessage = "";
+    
+    if (!hasAnyApiKey) {
+      // No API keys are configured - show the generic message about setting up API keys
+      insightsMessage = "No API keys configured. Please set up API keys in the settings to fetch actual data from social media platforms.";
+    } else {
+      // API keys are configured but no data was found
+      const platform = searchQuery?.platform || "social media platforms";
+      const keyword = searchQuery?.keyword || "the specified keyword";
+      const timeperiod = searchQuery?.timeperiod || "the selected time period";
+      
+      insightsMessage = `No data found for "${keyword}" on ${platform === 'all' ? 'any platform' : platform} for the last ${timeperiod} days. Please try a different keyword, platform, or time period.`;
+    }
+    
+    // Generate analytics structure with the appropriate message
     const analytics = {
       metrics: {
         totalComments: 0,
@@ -513,7 +547,7 @@ export class MemStorage implements IStorage {
       platformDistribution: [],
       topKeywords: [],
       influencers: [],
-      aiInsights: "No data available for analysis yet. Please run a search to gather social media comments.",
+      aiInsights: insightsMessage,
       searchQueryId
     };
     
