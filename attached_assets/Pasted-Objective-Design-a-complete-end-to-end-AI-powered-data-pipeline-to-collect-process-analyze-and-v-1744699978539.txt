@@ -1,0 +1,85 @@
+Objective:
+Design a complete end-to-end AI-powered data pipeline to collect, process, analyze, and visualize real-time social media comments related to a specific keyword or person’s name (e.g., "ఎమ్మెల్యే కాకర్ల సురేష్ గారు"), across platforms like YouTube, Twitter (X), Instagram, and Facebook.
+
+📌 Prompt Content:
+I want to build a real-time AI application that collects comments and feedback related to a person or keyword across YouTube, Twitter (X), Instagram, and Facebook.
+
+For example, I want to analyze public sentiment and feedback for the Telugu politician "ఎమ్మెల్యే కాకర్ల సురేష్ గారు". The system should:
+
+🎯 Functional Requirements:
+Accept input as a person’s name or keyword (supports English and Telugu).
+
+Generate possible variations (transliterations and keyword combos).
+
+Use respective platform APIs (YouTube Data API, X API, Meta Graph API) to fetch:
+
+Recent public comments, posts, replies.
+
+Top-liked or top-replied content.
+
+Perform data cleaning, language detection, and translation (Telugu → English if required).
+
+Run sentiment analysis and topic extraction using pre-trained LLM/NLP models.
+
+Store results in a structured database (MongoDB or PostgreSQL).
+
+Provide REST APIs to expose analytics to a frontend.
+
+Frontend dashboard should display:
+
+Top keywords
+
+Sentiment trends over time
+
+Influential commenters
+
+Sample positive/negative/neutral comments
+
+🔧 Technical Expectations:
+Use Spring Boot or Node.js for backend.
+
+Use Kafka or RabbitMQ if needed for streaming/decoupling.
+
+Use YouTube Data API, X API (v2), Meta Graph API.
+
+Integrate language detection, translation, and sentiment models (like VADER, TextBlob, or Hugging Face models for Telugu/English).
+
+Store all raw + processed data in MongoDB/PostgreSQL.
+
+Build analytics REST endpoints.
+
+Visualize results using React (or Angular), with charts and filters.
+
+🧠 Bonus (Optional AI Upgrades):
+Summarize feedback with LLM.
+
+Show AI-generated feedback summary like:
+“Most users are happy with recent initiatives by Kakarl Suresh garu, especially in irrigation and roads.”
+
+Implement time-based filtering (e.g., feedback over past 7 days vs 30 days).
+
+Alert system if negative sentiment spikes.
+
+📦 Deployment:
+Should support containerization (Docker).
+
+Use Kubernetes or similar for scaling.
+
+Secure all external API tokens and endpoints.
+
+🧩 Output You Expect:
+Ask for:
+
+Component-wise pipeline design.
+
+Sequence flow from input to visualization.
+
+Tech stack suggestions.
+
+Microservices split if applicable.
+
+Sample database schema (e.g., comments, sentiments, queries).
+
+Diagrams (e.g., Mermaid or PlantUML syntax for architecture).
+
+CI/CD and cloud deployment options (AWS, GCP, or Azure).

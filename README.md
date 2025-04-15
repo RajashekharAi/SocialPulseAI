@@ -1,1 +1,1 @@
-# SocialPulseAI
+# SocialPulse-AI
