@@ -28,7 +28,7 @@ export default function TopicDistribution({ data, isLoading }: TopicDistribution
         </button>
       </div>
       <CardContent className="p-4">
-        <div className="chart-container h-[250px]">
+        <div className="chart-container h-[250px]" data-chart-type="topic">
           {isLoading ? (
             <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded">
               <div className="text-center">

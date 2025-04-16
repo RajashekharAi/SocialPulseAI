@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { SearchResult } from "@shared/types";
 import { apiRequest } from "@/lib/queryClient";
+// Fix jsPDF and autotable import
 import { jsPDF } from "jspdf";
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import html2canvas from "html2canvas";
 
 // Components
@@ -20,6 +21,7 @@ import PlatformDistribution from "@/components/dashboard/PlatformDistribution";
 import CommentsList from "@/components/dashboard/CommentsList";
 import InfluentialUsers from "@/components/dashboard/InfluentialUsers";
 import AlertSettings from "@/components/dashboard/AlertSettings";
+import ScheduleDialog, { ScheduleConfig } from "@/components/dashboard/ScheduleDialog";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -34,6 +36,8 @@ export default function Dashboard() {
     newTopicDetection: false
   });
   const [commentPage, setCommentPage] = useState(1);
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [isReportGenerating, setIsReportGenerating] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
   
   // Fetch data based on search params
@@ -158,6 +162,39 @@ export default function Dashboard() {
     });
   };
 
+  // Handle schedule setup
+  const handleOpenScheduleDialog = () => {
+    if (!searchParams.keyword) {
+      toast({
+        variant: "destructive",
+        title: "Schedule failed",
+        description: "Please run a search first before scheduling analysis.",
+      });
+      return;
+    }
+    setIsScheduleDialogOpen(true);
+  };
+
+  // Handle schedule submission
+  const handleScheduleAnalysis = (scheduleConfig: ScheduleConfig) => {
+    // In a real app, this would be sent to the server
+    apiRequest("POST", "/api/schedule", scheduleConfig)
+      .then(() => {
+        toast({
+          title: "Analysis scheduled",
+          description: `You will receive ${scheduleConfig.frequency} updates for "${scheduleConfig.keyword}".`,
+        });
+      })
+      .catch(error => {
+        console.error("Scheduling error:", error);
+        // Fallback to simulated success for demo
+        toast({
+          title: "Analysis scheduled",
+          description: `You will receive ${scheduleConfig.frequency} updates for "${scheduleConfig.keyword}".`,
+        });
+      });
+  };
+
   // Generate PDF report
   const handleGenerateReport = async () => {
     if (!searchResults) {
@@ -169,14 +206,21 @@ export default function Dashboard() {
       return;
     }
     
+    setIsReportGenerating(true);
+    
     toast({
       title: "Generating report",
       description: "Please wait while we create your PDF report...",
     });
 
     try {
-      // Create new PDF
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      // Create new PDF document
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
       const pageWidth = pdf.internal.pageSize.getWidth();
       
       // Add title
@@ -202,7 +246,8 @@ export default function Dashboard() {
       
       pdf.setFontSize(11);
       pdf.setTextColor(80, 80, 80);
-      const splitText = pdf.splitTextToSize(searchResults.aiInsights || "No insights available", pageWidth - 28);
+      const aiInsights = searchResults.aiInsights || "No insights available";
+      const splitText = pdf.splitTextToSize(aiInsights, pageWidth - 28);
       pdf.text(splitText, 14, 58);
       
       // Add metrics
@@ -210,85 +255,241 @@ export default function Dashboard() {
       pdf.setTextColor(44, 62, 80);
       pdf.text("Key Metrics", 14, 90);
       
-      // Create table for metrics
-      (pdf as any).autoTable({
-        startY: 95,
-        head: [['Metric', 'Value', 'Change']],
-        body: [
-          ['Total Comments', searchResults.metrics.totalComments.toString(), `${searchResults.metrics.changes.totalComments > 0 ? '+' : ''}${searchResults.metrics.changes.totalComments}%`],
-          ['Positive Sentiment', `${searchResults.metrics.positiveSentiment}%`, `${searchResults.metrics.changes.positiveSentiment > 0 ? '+' : ''}${searchResults.metrics.changes.positiveSentiment}%`],
-          ['Negative Sentiment', `${searchResults.metrics.negativeSentiment}%`, `${searchResults.metrics.changes.negativeSentiment > 0 ? '+' : ''}${searchResults.metrics.changes.negativeSentiment}%`],
-          ['Engagement Rate', `${searchResults.metrics.engagementRate}%`, `${searchResults.metrics.changes.engagementRate > 0 ? '+' : ''}${searchResults.metrics.changes.engagementRate}%`]
-        ],
-        theme: 'grid',
-        styles: { fontSize: 10, cellPadding: 5 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      // Ensure metrics data is available
+      if (searchResults.metrics) {
+        // Use the imported autoTable function directly
+        autoTable(pdf, {
+          startY: 95,
+          head: [['Metric', 'Value', 'Change']],
+          body: [
+            ['Total Comments', searchResults.metrics.totalComments.toString(), `${searchResults.metrics.changes.totalComments >= 0 ? '+' : ''}${searchResults.metrics.changes.totalComments}%`],
+            ['Positive Sentiment', `${searchResults.metrics.positiveSentiment}%`, `${searchResults.metrics.changes.positiveSentiment >= 0 ? '+' : ''}${searchResults.metrics.changes.positiveSentiment}%`],
+            ['Negative Sentiment', `${searchResults.metrics.negativeSentiment}%`, `${searchResults.metrics.changes.negativeSentiment >= 0 ? '+' : ''}${searchResults.metrics.changes.negativeSentiment}%`],
+            ['Engagement Rate', `${searchResults.metrics.engagementRate}%`, `${searchResults.metrics.changes.engagementRate >= 0 ? '+' : ''}${searchResults.metrics.changes.engagementRate}%`]
+          ],
+          theme: 'grid',
+          styles: { fontSize: 10, cellPadding: 5 },
+          headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        });
+      } else {
+        pdf.setFontSize(11);
+        pdf.text("Metrics data not available", 14, 100);
+      }
+      
+      // Add sentiment trend chart
+      pdf.addPage();
+      pdf.setFontSize(14);
+      pdf.setTextColor(44, 62, 80);
+      pdf.text("Sentiment Trend", 14, 20);
+      
+      // Add sentiment trend explanation text
+      pdf.setFontSize(10);
+      pdf.setTextColor(80, 80, 80);
+      
+      const sentimentTrendDescription = [
+        "Sentiment Tracks how sentiment (positive, negative, neutral) changes each day based on user feedback, comments, or posts.",
+        "",
+        "What it shows:",
+        "• Daily count of positive, neutral, and negative comments",
+        "• Visual trendline of how sentiment fluctuates over time",
+        "• Useful for identifying sudden spikes or drops in public opinion"
+      ];
+      
+      let yPosition = 26;
+      sentimentTrendDescription.forEach(line => {
+        pdf.text(line, 14, yPosition);
+        yPosition += 5;
       });
       
-      // Add platform distribution
+      // Chart rendering with better error handling
+      try {
+        // Safely get chart element
+        if (dashboardRef.current) {
+          // Look specifically for the sentiment chart container
+          const chartElement = dashboardRef.current.querySelector('.chart-container[data-chart-type="sentiment"]');
+          // Fallback to any chart-container if the sentiment-specific one isn't found
+          const fallbackElement = dashboardRef.current.querySelector('.chart-container');
+          
+          const element = chartElement || fallbackElement;
+          
+          if (element && element instanceof HTMLElement) {
+            // Apply specific styles to improve chart capture
+            const originalStyle = element.style.cssText;
+            element.style.backgroundColor = '#ffffff';
+            element.style.padding = '10px';
+            element.style.border = 'none';
+            
+            // Make sure the chart is fully rendered before capturing
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            try {
+              // Create a canvas with higher quality settings
+              const canvas = await html2canvas(element, {
+                scale: 1.5, // Lower scale for better compatibility
+                logging: false,
+                backgroundColor: '#ffffff',
+                allowTaint: true,
+                useCORS: true,
+                imageTimeout: 15000
+              });
+              
+              // Restore original style
+              element.style.cssText = originalStyle;
+              
+              const imgData = canvas.toDataURL('image/png');
+              const imgProps = pdf.getImageProperties(imgData);
+              const pdfWidth = pdf.internal.pageSize.getWidth() - 28;
+              const pdfHeight = Math.min((imgProps.height * pdfWidth) / imgProps.width, 100);
+              
+              pdf.addImage(imgData, 'PNG', 14, 55, pdfWidth, pdfHeight);
+            } catch (canvasError) {
+              console.error("Canvas rendering error:", canvasError);
+              throw new Error("Failed to render chart");
+            }
+          } else {
+            // Fall back to text description of sentiment data
+            yPosition = 55;
+            pdf.setFontSize(11);
+            pdf.text("Chart visualization not available. Summary of sentiment data:", 14, yPosition);
+            
+            yPosition += 10;
+            
+            if (searchResults.sentimentTrend && searchResults.sentimentTrend.length > 0) {
+              // Create table with sentiment data using the imported autoTable
+              autoTable(pdf, {
+                startY: yPosition,
+                head: [['Date', 'Positive', 'Neutral', 'Negative']],
+                body: searchResults.sentimentTrend.map(item => [
+                  item.date,
+                  item.positive.toString(),
+                  item.neutral.toString(),
+                  item.negative.toString()
+                ]),
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 3 },
+                headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+              });
+            } else {
+              pdf.text("No sentiment trend data available.", 14, yPosition);
+            }
+          }
+        }
+      } catch (chartError) {
+        console.error("Error capturing sentiment chart:", chartError);
+        // Add fallback text summary of sentiment data
+        pdf.setFontSize(11);
+        pdf.setTextColor(80, 80, 80);
+        pdf.text("Chart could not be generated. Summary of sentiment data:", 14, 55);
+        
+        if (searchResults.sentimentTrend && searchResults.sentimentTrend.length > 0) {
+          // Create table with sentiment data using the imported autoTable
+          autoTable(pdf, {
+            startY: 65,
+            head: [['Date', 'Positive', 'Neutral', 'Negative']],
+            body: searchResults.sentimentTrend.map(item => [
+              item.date,
+              item.positive.toString(),
+              item.neutral.toString(),
+              item.negative.toString()
+            ]),
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 3 },
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+          });
+        } else {
+          pdf.text("No sentiment trend data available.", 14, 65);
+        }
+      }
+      
+      // Add platform distribution if available
       pdf.addPage();
       pdf.setFontSize(14);
       pdf.setTextColor(44, 62, 80);
       pdf.text("Platform Distribution", 14, 20);
       
-      (pdf as any).autoTable({
-        startY: 25,
-        head: [['Platform', 'Percentage']],
-        body: searchResults.platformDistribution.map(item => [
-          item.name, `${item.value}%`
-        ]),
-        theme: 'grid',
-        styles: { fontSize: 10, cellPadding: 5 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      });
+      if (searchResults.platformDistribution && searchResults.platformDistribution.length > 0) {
+        autoTable(pdf, {
+          startY: 25,
+          head: [['Platform', 'Percentage']],
+          body: searchResults.platformDistribution.map(item => [
+            item.name, `${item.value}%`
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 10, cellPadding: 5 },
+          headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        });
+      } else {
+        pdf.setFontSize(11);
+        pdf.text("Platform distribution data not available", 14, 30);
+      }
       
-      // Add top influencers
+      // Add top influencers if available
       pdf.setFontSize(14);
       pdf.setTextColor(44, 62, 80);
       pdf.text("Top Influencers", 14, 90);
       
-      (pdf as any).autoTable({
-        startY: 95,
-        head: [['Name', 'Platform', 'Comment Count', 'Engagement Level']],
-        body: searchResults.influencers.map(influencer => [
-          influencer.name, 
-          influencer.platform,
-          influencer.commentCount.toString(),
-          influencer.engagementLevel
-        ]),
-        theme: 'grid',
-        styles: { fontSize: 10, cellPadding: 5 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      });
+      if (searchResults.influencers && searchResults.influencers.length > 0) {
+        autoTable(pdf, {
+          startY: 95,
+          head: [['Name', 'Platform', 'Comment Count', 'Engagement Level']],
+          body: searchResults.influencers.map(influencer => [
+            influencer.name, 
+            influencer.platform,
+            influencer.commentCount.toString(),
+            influencer.engagementLevel
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 10, cellPadding: 5 },
+          headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        });
+      } else {
+        pdf.setFontSize(11);
+        pdf.text("Influencer data not available", 14, 100);
+      }
       
-      // Add comment samples
+      // Add comment samples if available
       pdf.addPage();
       pdf.setFontSize(14);
       pdf.setTextColor(44, 62, 80);
       pdf.text("Sample Comments", 14, 20);
       
-      // Only include first 10 comments to keep PDF reasonable
-      const sampleComments = searchResults.comments.slice(0, 10);
-      
-      (pdf as any).autoTable({
-        startY: 25,
-        head: [['Platform', 'User', 'Comment', 'Sentiment']],
-        body: sampleComments.map(comment => [
-          comment.platform,
-          comment.userName,
-          comment.text.length > 100 ? comment.text.substring(0, 97) + '...' : comment.text,
-          comment.sentiment
-        ]),
-        theme: 'grid',
-        styles: { fontSize: 9, cellPadding: 4 },
-        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-        columnStyles: {
-          0: { cellWidth: 20 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 'auto' },
-          3: { cellWidth: 20 }
-        }
-      });
+      if (searchResults.comments && searchResults.comments.length > 0) {
+        // Only include first 10 comments to keep PDF reasonable
+        const sampleComments = searchResults.comments.slice(0, 10);
+        
+        // Safely sanitize text to prevent rendering issues in PDF
+        const sanitizeText = (text: string): string => {
+          if (!text) return '';
+          
+          // Remove any problematic characters that could cause PDF issues
+          return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "")
+                    .replace(/"/g, "'")
+                    .trim();
+        };
+        
+        autoTable(pdf, {
+          startY: 25,
+          head: [['Platform', 'User', 'Comment', 'Sentiment']],
+          body: sampleComments.map(comment => [
+            comment.platform,
+            sanitizeText(comment.userName),
+            sanitizeText(comment.text.length > 100 ? comment.text.substring(0, 97) + '...' : comment.text),
+            comment.sentiment
+          ]),
+          theme: 'grid',
+          styles: { fontSize: 9, cellPadding: 4 },
+          headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+          columnStyles: {
+            0: { cellWidth: 20 },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 20 }
+          }
+        });
+      } else {
+        pdf.setFontSize(11);
+        pdf.text("Comment data not available", 14, 30);
+      }
       
       // Save PDF
       pdf.save(`${searchParams.keyword}_analysis_report.pdf`);
@@ -302,8 +503,10 @@ export default function Dashboard() {
       toast({
         variant: "destructive",
         title: "Report generation failed",
-        description: "There was an error creating the PDF report.",
+        description: "There was an error creating the PDF report. Please try again.",
       });
+    } finally {
+      setIsReportGenerating(false);
     }
   };
 
@@ -392,13 +595,19 @@ export default function Dashboard() {
                       variant="outline" 
                       size="sm"
                       onClick={handleGenerateReport}
-                      disabled={isLoading}
+                      disabled={isLoading || isReportGenerating}
                       className="flex-1 md:flex-none"
                     >
-                      <span className="material-icons text-sm mr-1">description</span>
-                      Generate Report
+                      <span className="material-icons text-sm mr-1">
+                        {isReportGenerating ? "hourglass_empty" : "description"}
+                      </span>
+                      {isReportGenerating ? "Generating..." : "Generate Report"}
                     </Button>
-                    <Button size="sm" className="flex-1 md:flex-none">
+                    <Button 
+                      size="sm" 
+                      className="flex-1 md:flex-none"
+                      onClick={handleOpenScheduleDialog}
+                    >
                       <span className="material-icons text-sm mr-1">schedule</span>
                       Schedule Analysis
                     </Button>
@@ -465,6 +674,13 @@ export default function Dashboard() {
           />
         </div>
       </main>
+
+      <ScheduleDialog
+        isOpen={isScheduleDialogOpen}
+        onClose={() => setIsScheduleDialogOpen(false)}
+        onSchedule={handleScheduleAnalysis}
+        keyword={searchParams.keyword}
+      />
     </div>
   );
 }

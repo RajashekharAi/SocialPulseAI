@@ -35,7 +35,7 @@ export default function PlatformDistribution({ data, isLoading }: PlatformDistri
         <h3 className="font-medium">Comments by Platform</h3>
       </div>
       <CardContent className="p-4">
-        <div className="chart-container h-[250px]">
+        <div className="chart-container h-[250px]" data-chart-type="platform">
           {isLoading ? (
             <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded">
               <div className="text-center">

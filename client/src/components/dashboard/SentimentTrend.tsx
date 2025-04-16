@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
@@ -26,6 +26,101 @@ type SentimentTrendProps = {
 
 export default function SentimentTrend({ data, isLoading }: SentimentTrendProps) {
   const [timeUnit, setTimeUnit] = useState<TimeUnit>("daily");
+  const [formattedData, setFormattedData] = useState<any[]>([]);
+
+  // Memoize the groupDataByWeek function to prevent unnecessary recalculations
+  const groupDataByWeek = useCallback((dailyData: any[]) => {
+    if (!dailyData || dailyData.length === 0) return [];
+    
+    const weeklyData: any[] = [];
+    let currentWeek: any = null;
+    let weekTotal = { positive: 0, neutral: 0, negative: 0, days: 0 };
+
+    dailyData.forEach((day, index) => {
+      // Handle possible date format issues
+      const date = new Date(day.date);
+      if (isNaN(date.getTime())) {
+        console.error("Invalid date format:", day.date);
+        return;
+      }
+      
+      const weekStart = getWeekStart(date).toISOString().split('T')[0];
+      
+      if (!currentWeek || currentWeek !== weekStart) {
+        if (currentWeek && weekTotal.days > 0) {
+          weeklyData.push({
+            date: `Week of ${currentWeek}`,
+            positive: Math.round(weekTotal.positive / weekTotal.days),
+            neutral: Math.round(weekTotal.neutral / weekTotal.days),
+            negative: Math.round(weekTotal.negative / weekTotal.days)
+          });
+        }
+        currentWeek = weekStart;
+        weekTotal = { 
+          positive: day.positive, 
+          neutral: day.neutral, 
+          negative: day.negative, 
+          days: 1 
+        };
+      } else {
+        weekTotal.positive += day.positive;
+        weekTotal.neutral += day.neutral;
+        weekTotal.negative += day.negative;
+        weekTotal.days += 1;
+      }
+      
+      // Add the last week
+      if (index === dailyData.length - 1 && weekTotal.days > 0) {
+        weeklyData.push({
+          date: `Week of ${currentWeek}`,
+          positive: Math.round(weekTotal.positive / weekTotal.days),
+          neutral: Math.round(weekTotal.neutral / weekTotal.days),
+          negative: Math.round(weekTotal.negative / weekTotal.days)
+        });
+      }
+    });
+    
+    return weeklyData;
+  }, []);
+
+  // Helper function to get the start of the week (Sunday)
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day); // Set to Sunday
+    return d;
+  };
+
+  // Process the data whenever it changes or timeUnit changes
+  useEffect(() => {
+    if (data && data.length > 0) {
+      try {
+        // Process the data based on the selected time unit
+        if (timeUnit === "daily") {
+          // Ensure we have valid data
+          const validData = data.filter(item => {
+            const date = new Date(item.date);
+            return !isNaN(date.getTime());
+          });
+          setFormattedData(validData);
+        } else {
+          // Group the data by week for weekly view
+          const weeklyData = groupDataByWeek(data);
+          setFormattedData(weeklyData);
+        }
+      } catch (error) {
+        console.error("Error processing sentiment trend data:", error);
+        setFormattedData([]);
+      }
+    } else {
+      setFormattedData([]);
+    }
+  }, [data, timeUnit, groupDataByWeek]);
+
+  // Custom tooltip formatter to display percentages
+  const tooltipFormatter = (value: number) => {
+    return `${value}%`;
+  };
 
   return (
     <Card className="bg-white rounded-lg shadow">
@@ -45,7 +140,7 @@ export default function SentimentTrend({ data, isLoading }: SentimentTrendProps)
         </Select>
       </div>
       <CardContent className="p-4">
-        <div className="chart-container h-[250px]">
+        <div className="chart-container h-[250px]" data-chart-type="sentiment">
           {isLoading ? (
             <div className="w-full h-full flex items-center justify-center bg-gray-50 rounded">
               <div className="text-center">
@@ -55,21 +150,30 @@ export default function SentimentTrend({ data, isLoading }: SentimentTrendProps)
                 </p>
               </div>
             </div>
-          ) : data && data.length > 0 ? (
+          ) : formattedData && formattedData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={data}
+                data={formattedData}
                 margin={{
                   top: 5,
                   right: 30,
                   left: 20,
-                  bottom: 5,
+                  bottom: 20,
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
+                <XAxis 
+                  dataKey="date" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={70}
+                  tick={{fontSize: 12}}
+                />
+                <YAxis 
+                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                  domain={[0, 100]}
+                />
+                <Tooltip formatter={tooltipFormatter} />
                 <Legend />
                 <Line 
                   type="monotone" 
@@ -77,18 +181,21 @@ export default function SentimentTrend({ data, isLoading }: SentimentTrendProps)
                   stroke="#10B981" 
                   activeDot={{ r: 8 }} 
                   name="Positive" 
+                  strokeWidth={2}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="neutral" 
                   stroke="#94A3B8" 
                   name="Neutral" 
+                  strokeWidth={2}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="negative" 
                   stroke="#EF4444" 
                   name="Negative" 
+                  strokeWidth={2}
                 />
               </LineChart>
             </ResponsiveContainer>
