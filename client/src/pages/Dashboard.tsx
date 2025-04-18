@@ -626,7 +626,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <SentimentTrend 
               data={searchResults?.sentimentTrend || null} 
-              isLoading={isLoading} 
+              isLoading={isLoading}
+              timePeriod={searchParams.timeperiod}
             />
             <TopicDistribution 
               data={searchResults?.topicDistribution || null} 

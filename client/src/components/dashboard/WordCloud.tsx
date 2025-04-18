@@ -22,6 +22,25 @@ export default function WordCloud({ data, isLoading }: WordCloudProps) {
   const maxValue = data && data.length > 0 
     ? Math.max(...data.map(item => item.value)) 
     : 0;
+    
+  // Sanitize text to remove HTML tags and invalid characters
+  const sanitizeText = (text: string): string => {
+    if (!text) return '';
+    
+    // Create a temporary div to decode HTML entities and strip HTML tags
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    
+    // Get text content (this removes all HTML tags)
+    let sanitizedText = tempDiv.textContent || '';
+    
+    // Replace invalid characters and control characters
+    return sanitizedText
+      // Remove control characters (except line breaks and tabs)
+      .replace(/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+      // Replace HTML entities that might have been missed
+      .replace(/&[^;]+;/g, ' ');
+  };
 
   return (
     <Card className="bg-white rounded-lg shadow">
@@ -52,7 +71,7 @@ export default function WordCloud({ data, isLoading }: WordCloudProps) {
                     color: `hsl(${(index * 40) % 360}, ${50 + (word.value / maxValue) * 30}%, ${40 + (word.value / maxValue) * 20}%)`
                   }}
                 >
-                  {word.text}
+                  {sanitizeText(word.text)}
                 </div>
               ))}
             </div>

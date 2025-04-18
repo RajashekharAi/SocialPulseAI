@@ -65,19 +65,37 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
     }
   };
   
-  // Safely handle HTML content and render links as clickable
-  const sanitizeText = (text: string): React.ReactNode => {
+  // Safely handle text content and sanitize HTML tags and invalid characters
+  const sanitizeText = (text: string): string => {
     if (!text) return '';
     
-    // First, let's create a temporary div to decode HTML entities
-    const decodedText = document.createElement('div');
-    decodedText.innerHTML = text;
-    const textContent = decodedText.textContent || '';
+    // Create a temporary div to decode HTML entities and strip HTML tags
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    
+    // Get text content (this removes all HTML tags)
+    let sanitizedText = tempDiv.textContent || '';
+    
+    // Replace invalid characters and control characters
+    sanitizedText = sanitizedText
+      // Remove control characters (except line breaks and tabs)
+      .replace(/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+      // Replace HTML entities that might have been missed
+      .replace(/&[^;]+;/g, ' ');
+      
+    return sanitizedText;
+  };
+  
+  // Function to render text with clickable links but no HTML tags
+  const renderTextWithLinks = (text: string): React.ReactNode => {
+    if (!text) return '';
+    
+    // First sanitize the text
+    const sanitizedText = sanitizeText(text);
     
     // Now handle links and line breaks
-    // Split by the standard link pattern
     const linkPattern = /(https?:\/\/[^\s]+)/g;
-    const parts = textContent.split(linkPattern);
+    const parts = sanitizedText.split(linkPattern);
     
     return (
       <>
@@ -190,10 +208,10 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
                       <span className="text-xs text-gray-500">{comment.timeAgo || "Unknown time"}</span>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{sanitizeText(comment.text)}</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-line">{renderTextWithLinks(comment.text)}</p>
                   {comment.translation && (
                     <p className="text-xs text-gray-500 mt-1">
-                      <em>Translation: {sanitizeText(comment.translation)}</em>
+                      <em>Translation: {renderTextWithLinks(comment.translation)}</em>
                     </p>
                   )}
                 </div>

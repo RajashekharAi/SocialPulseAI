@@ -22,9 +22,10 @@ type SentimentTrendProps = {
     negative: number;
   }> | null;
   isLoading: boolean;
+  timePeriod?: string; // Add time period prop
 };
 
-export default function SentimentTrend({ data, isLoading }: SentimentTrendProps) {
+export default function SentimentTrend({ data, isLoading, timePeriod = "30" }: SentimentTrendProps) {
   const [timeUnit, setTimeUnit] = useState<TimeUnit>("daily");
   const [formattedData, setFormattedData] = useState<any[]>([]);
 
@@ -91,21 +92,39 @@ export default function SentimentTrend({ data, isLoading }: SentimentTrendProps)
     return d;
   };
 
+  // Filter data to match the selected time period
+  const getFilteredData = useCallback((originalData: any[] | null) => {
+    if (!originalData || originalData.length === 0) return [];
+    
+    const now = new Date();
+    const timePeriodDays = parseInt(timePeriod, 10);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(now.getDate() - timePeriodDays);
+    
+    return originalData.filter(item => {
+      const itemDate = new Date(item.date);
+      return !isNaN(itemDate.getTime()) && itemDate >= cutoffDate;
+    });
+  }, [timePeriod]);
+
   // Process the data whenever it changes or timeUnit changes
   useEffect(() => {
     if (data && data.length > 0) {
       try {
-        // Process the data based on the selected time unit
+        // First filter the data based on time period
+        const filteredData = getFilteredData(data);
+        
+        // Then process the filtered data based on the selected time unit
         if (timeUnit === "daily") {
           // Ensure we have valid data
-          const validData = data.filter(item => {
+          const validData = filteredData.filter(item => {
             const date = new Date(item.date);
             return !isNaN(date.getTime());
           });
           setFormattedData(validData);
         } else {
           // Group the data by week for weekly view
-          const weeklyData = groupDataByWeek(data);
+          const weeklyData = groupDataByWeek(filteredData);
           setFormattedData(weeklyData);
         }
       } catch (error) {
@@ -115,7 +134,7 @@ export default function SentimentTrend({ data, isLoading }: SentimentTrendProps)
     } else {
       setFormattedData([]);
     }
-  }, [data, timeUnit, groupDataByWeek]);
+  }, [data, timeUnit, groupDataByWeek, getFilteredData]);
 
   // Custom tooltip formatter to display percentages
   const tooltipFormatter = (value: number) => {
