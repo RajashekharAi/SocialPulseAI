@@ -21,11 +21,28 @@ class MediaCollector {
    */
   private async loadApiKeys() {
     try {
+      console.log("Loading API keys from storage...");
       this.apiKeys = await storage.getApiKeys();
+      
+      // Debug log - List which API keys are configured
+      Object.entries(this.apiKeys).forEach(([platform, key]) => {
+        console.log(`${platform} API key ${key ? 'is configured' : 'is not configured'}`);
+      });
+      
+      if (!this.apiKeys.youtube) {
+        console.warn("YouTube API key not found in storage, will check environment variables");
+        
+        // Try to get from environment variables
+        if (process.env.YOUTUBE_API_KEY) {
+          console.log("Found YouTube API key in environment variables");
+          this.apiKeys.youtube = process.env.YOUTUBE_API_KEY;
+        }
+      }
     } catch (error) {
       console.error("Failed to load API keys:", error);
     }
   }
+  
   /**
    * Collect comments from various social media platforms
    * @param keyword The search keyword or person name
@@ -206,6 +223,9 @@ class MediaCollector {
           
           let commentCount = 0;
           let videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+          let viewCount = 0;
+          let likeCount = 0;
+          let channelTitle = '';
           
           if (videoDetailsResponse.ok) {
             const videoDetails = await videoDetailsResponse.json();
@@ -214,7 +234,7 @@ class MediaCollector {
               viewCount = parseInt(statistics.viewCount || '0', 10);
               likeCount = parseInt(statistics.likeCount || '0', 10);
               commentCount = parseInt(statistics.commentCount || '0', 10);
-              channelTitle = videoDetails.items[0].snippet.channelTitle || '';
+              channelTitle = videoDetails.items[0].snippet?.channelTitle || '';
             }
           }
           
