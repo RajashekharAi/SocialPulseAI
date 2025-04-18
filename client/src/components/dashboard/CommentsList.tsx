@@ -14,7 +14,7 @@ type CommentsListProps = {
 
 export default function CommentsList({ comments, isLoading, onLoadMore, hasMore }: CommentsListProps) {
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
-  const [sortOrder, setSortOrder] = useState<string>("recent");
+  const [sortOrder, setSortOrder] = useState<string>("newest");
 
   // Apply filters to comments
   const filteredComments = comments 
@@ -29,11 +29,36 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
     if (sortOrder === "engaging" && a.engagementScore !== undefined && b.engagementScore !== undefined) {
       return b.engagementScore - a.engagementScore;
     }
+    if (sortOrder === "newest") {
+      // For newest first, sort by createdAt date (newer dates first)
+      // Add null checks before accessing timeAgo
+      if (!a.timeAgo && !b.timeAgo) return 0;
+      if (!a.timeAgo) return 1;  // a is undefined, so b comes first
+      if (!b.timeAgo) return -1; // b is undefined, so a comes first
+      
+      const dateA = new Date(a.timeAgo.replace("ago", "").trim());
+      const dateB = new Date(b.timeAgo.replace("ago", "").trim());
+      
+      // If we can't parse dates properly, fallback to string comparison
+      if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+        return a.timeAgo.localeCompare(b.timeAgo);
+      }
+      
+      return dateB.getTime() - dateA.getTime();
+    }
     // Default to recent sorting with null/undefined check
     if (!a.timeAgo) return 1;
     if (!b.timeAgo) return -1;
     return a.timeAgo.localeCompare(b.timeAgo);
   });
+
+  // Format time ago string from timestamp or date string
+  const formatTimeAgo = (timeAgo: string | undefined): string => {
+    if (timeAgo) return timeAgo;
+    
+    // If timeAgo is not available, return an empty string
+    return "";
+  };
 
   // Get border color based on sentiment
   const getBorderColor = (sentiment: string) => {
@@ -149,6 +174,7 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
               <SelectItem value="recent">Recent First</SelectItem>
               <SelectItem value="engaging">Most Engaging</SelectItem>
             </SelectContent>
@@ -205,7 +231,7 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
                       >
                         {comment.sentiment}
                       </Badge>
-                      <span className="text-xs text-gray-500">{comment.timeAgo || "Unknown time"}</span>
+                      <span className="text-xs text-gray-500">{formatTimeAgo(comment.timeAgo)}</span>
                     </div>
                   </div>
                   <p className="text-sm text-gray-700 whitespace-pre-line">{renderTextWithLinks(comment.text)}</p>

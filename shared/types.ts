@@ -1,5 +1,13 @@
 // Types for the frontend
 
+import { InsertComment } from "./schema";
+
+// Extended Comment type with metadata properties
+export interface ExtendedComment extends InsertComment {
+  isVideoMetadata?: boolean;
+  isCommentMetric?: boolean;
+}
+
 export type Comment = {
   id: number;
   platform: string;

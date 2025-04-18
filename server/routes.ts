@@ -56,6 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to save alert settings" });
     }
   });
+
   // Search/analyze endpoint
   app.get("/api/analyze", async (req, res) => {
     try {
@@ -63,6 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timeperiod = parseInt(req.query.timeperiod as string || "30");
       const platform = req.query.platform as string || "all";
       const page = parseInt(req.query.page as string || "1");
+      const isVideoTitleSearch = req.query.isVideoTitleSearch === "true";
       
       if (!keyword) {
         return res.status(400).json({ message: "Keyword is required" });
@@ -74,12 +76,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timeperiod,
         platform,
         userId: 1, // Default user for now
+        isVideoTitleSearch, // Add the video title search flag
       };
 
-      // First check if we have cached results
-      const cachedResults = await storage.getSearchResultsByKeyword(keyword, timeperiod, platform);
+      // For video title search, we don't use cache to always get fresh data
+      const shouldUseCache = !isVideoTitleSearch && !req.query.refresh;
       
-      if (cachedResults && !req.query.refresh) {
+      // First check if we have cached results
+      const cachedResults = shouldUseCache ? 
+        await storage.getSearchResultsByKeyword(keyword, timeperiod, platform) : 
+        null;
+      
+      if (cachedResults) {
         // Add pagination for comments
         const paginatedComments = await storage.getCommentsBySearchQueryId(
           cachedResults.searchQueryId,
@@ -96,7 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Collect data from social media platforms
-      const comments = await mediaCollector.collectComments(keyword, timeperiod, platform);
+      const comments = await mediaCollector.collectComments(keyword, timeperiod, platform, isVideoTitleSearch);
       
       // Analyze sentiment
       const analyzedComments = await sentimentAnalyzer.analyzeBatch(comments);
@@ -112,18 +120,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate analytics
       const analytics = await storage.generateAnalytics(savedQuery.id);
+
+      // Check if this was a YouTube video search and modify the response accordingly
+      let responseData = {
+        keyword,
+        timeperiod,
+        platform,
+        isVideoTitleSearch,
+        ...analytics,
+        lastUpdated: new Date().toISOString()
+      };
       
       // Return results with the first page of comments
       const firstPageComments = await storage.getCommentsBySearchQueryId(savedQuery.id, 1, 10);
       
+      // For video title search, we might want to add video metadata
+      if (isVideoTitleSearch) {
+        // Look for the VIDEO_METADATA "comment" that contains video details
+        const metadataComment = commentTopics.find(c => c.userName === "VIDEO_METADATA");
+        
+        if (metadataComment) {
+          try {
+            const videoMetadata = JSON.parse(metadataComment.text);
+            responseData = {
+              ...responseData,
+              videoMetadata,
+              videoTitle: videoMetadata.title,
+              channelTitle: videoMetadata.channelTitle,
+              viewCount: videoMetadata.viewCount,
+              likeCount: videoMetadata.likeCount,
+              commentCount: videoMetadata.commentCount,
+              videoUrl: videoMetadata.url
+            };
+            
+            // Remove the metadata "comment" from the comments list
+            const filteredComments = firstPageComments.filter(
+              c => c.userName !== "VIDEO_METADATA"
+            );
+            
+            return res.json({
+              ...responseData,
+              comments: filteredComments,
+              hasMoreComments: filteredComments.length === 10 && firstPageComments.length > filteredComments.length
+            });
+          } catch (error) {
+            console.error("Error parsing video metadata:", error);
+          }
+        }
+      }
+      
+      // Default response for regular searches or if metadata parsing fails
       return res.json({
-        keyword,
-        timeperiod,
-        platform,
-        ...analytics,
+        ...responseData,
         comments: firstPageComments,
-        hasMoreComments: firstPageComments.length === 10,
-        lastUpdated: new Date().toISOString()
+        hasMoreComments: firstPageComments.length === 10
       });
     } catch (error) {
       console.error("Error in /api/analyze:", error);

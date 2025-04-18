@@ -28,7 +28,8 @@ export default function Dashboard() {
   const [searchParams, setSearchParams] = useState({
     keyword: "",
     timeperiod: "30",
-    platform: "all"
+    platform: "all",
+    isVideoTitleSearch: false
   });
   const [alertSettings, setAlertSettings] = useState({
     negativeSentimentSpike: true,
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [isReportGenerating, setIsReportGenerating] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const [queryTimestamp, setQueryTimestamp] = useState(Date.now());
   
   // Fetch data based on search params
   const { 
@@ -47,14 +49,16 @@ export default function Dashboard() {
     refetch, 
     isFetching 
   } = useQuery<SearchResult>({
-    queryKey: [`/api/analyze?keyword=${searchParams.keyword}&timeperiod=${searchParams.timeperiod}&platform=${searchParams.platform}&page=${commentPage}`],
+    queryKey: [`/api/analyze?keyword=${searchParams.keyword}&timeperiod=${searchParams.timeperiod}&platform=${searchParams.platform}&isVideoTitleSearch=${searchParams.isVideoTitleSearch}&page=${commentPage}&ts=${queryTimestamp}`],
     enabled: !!searchParams.keyword
   });
 
   // Handle search form submission
-  const handleSearch = (values: { keyword: string; timeperiod: string; platform: string }) => {
+  const handleSearch = (values: { keyword: string; timeperiod: string; platform: string; isVideoTitleSearch: boolean }) => {
     setCommentPage(1); // Reset to first page when new search is performed
     setSearchParams(values);
+    // Generate a new timestamp to force refetch even with the same parameters
+    setQueryTimestamp(Date.now());
   };
 
   // Handle refresh data
@@ -72,7 +76,7 @@ export default function Dashboard() {
     setAlertSettings(newAlerts as {
       negativeSentimentSpike: boolean;
       engagementVolume: boolean;
-      newTopicDetection: boolean;
+      newTopicDetection: boolean
     });
     
     // Save to server
