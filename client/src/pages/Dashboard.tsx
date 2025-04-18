@@ -527,23 +527,7 @@ export default function Dashboard() {
               </div>
               
               <div className="lg:col-span-3 flex items-end justify-end">
-                <div className="flex flex-col sm:flex-row items-center gap-2 w-full">
-                  <div className="text-sm text-gray-500 mb-2 sm:mb-0 text-center sm:text-left">
-                    Last updated: <span className="font-medium">{getLastUpdatedTime()}</span>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRefresh}
-                    disabled={isFetching}
-                    className="w-full sm:w-auto"
-                  >
-                    <span className="material-icons text-sm mr-1">
-                      {isFetching ? "sync" : "refresh"}
-                    </span>
-                    Refresh
-                  </Button>
-                </div>
+                {/* Removed "Last updated" and refresh button */}
               </div>
             </div>
           </div>
