@@ -6,7 +6,7 @@ import {
   type InsertComment,
   type InsertUser
 } from "@shared/schema";
-import { SearchResult, Metrics, Influencer } from "@shared/types";
+import { SearchResult, Metrics, Influencer, PaginatedComments } from "@shared/types";
 
 // Interface for storage operations
 export interface IStorage {
@@ -30,7 +30,9 @@ export interface IStorage {
     searchQueryId: number, 
     page: number, 
     pageSize: number
-  ): Promise<Comment[]>;
+  ): Promise<PaginatedComments>;
+  getAllCommentsBySearchQueryId(searchQueryId: number): Promise<PaginatedComments>;
+  getTotalCommentCount(searchQueryId: number): Promise<number>;
   
   // API Configuration operations
   getApiKeys(): Promise<{ [key: string]: string | null }>;
@@ -200,11 +202,22 @@ export class MemStorage implements IStorage {
     this.comments.set(searchQueryId, storedComments);
   }
 
+  async getTotalCommentCount(searchQueryId: number): Promise<number> {
+    const allComments = this.comments.get(searchQueryId) || [];
+    
+    // Filter out metadata entries
+    const actualComments = allComments.filter(
+      comment => !comment.isVideoMetadata && !comment.isCommentMetric
+    );
+    
+    return actualComments.length;
+  }
+
   async getCommentsBySearchQueryId(
     searchQueryId: number,
     page: number,
     pageSize: number
-  ): Promise<Comment[]> {
+  ): Promise<PaginatedComments> {
     const allComments = this.comments.get(searchQueryId) || [];
     
     // Filter out metadata entries before pagination
@@ -215,7 +228,37 @@ export class MemStorage implements IStorage {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
     
-    return actualComments.slice(start, end);
+    // Calculate if there are more pages
+    const hasMore = actualComments.length > end;
+    
+    // Return paginated result with metadata
+    return {
+      comments: actualComments.slice(start, end),
+      total: actualComments.length,
+      page,
+      pageSize,
+      hasMore
+    };
+  }
+
+  async getAllCommentsBySearchQueryId(
+    searchQueryId: number
+  ): Promise<PaginatedComments> {
+    const allComments = this.comments.get(searchQueryId) || [];
+    
+    // Filter out metadata entries
+    const actualComments = allComments.filter(
+      comment => !comment.isVideoMetadata && !comment.isCommentMetric
+    );
+    
+    // Return all comments with metadata
+    return {
+      comments: actualComments,
+      total: actualComments.length,
+      page: 1,
+      pageSize: actualComments.length,
+      hasMore: false
+    };
   }
 
   // API Configuration operations

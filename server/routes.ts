@@ -63,7 +63,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const keyword = req.query.keyword as string;
       const timeperiod = parseInt(req.query.timeperiod as string || "30");
       const platform = req.query.platform as string || "all";
-      const page = parseInt(req.query.page as string || "1");
       const isVideoTitleSearch = req.query.isVideoTitleSearch === "true";
       
       if (!keyword) {
@@ -88,18 +87,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         null;
       
       if (cachedResults) {
-        // Add pagination for comments
-        const paginatedComments = await storage.getCommentsBySearchQueryId(
-          cachedResults.searchQueryId,
-          page,
-          10
+        // Get ALL comments without pagination
+        const allCommentsResult = await storage.getAllCommentsBySearchQueryId(
+          cachedResults.searchQueryId
         );
         
-        // Add the complete result with paginated comments
+        // Add the complete result with all comments
         return res.json({
           ...cachedResults,
-          comments: paginatedComments,
-          hasMoreComments: paginatedComments.length === 10, // If we got a full page, there might be more
+          comments: allCommentsResult.comments,
+          totalComments: allCommentsResult.total
         });
       }
 
@@ -131,8 +128,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastUpdated: new Date().toISOString()
       };
       
-      // Return results with the first page of comments
-      const firstPageComments = await storage.getCommentsBySearchQueryId(savedQuery.id, 1, 10);
+      // Return results with ALL comments
+      const allCommentsResult = await storage.getAllCommentsBySearchQueryId(savedQuery.id);
       
       // For video title search, we might want to add video metadata
       if (isVideoTitleSearch) {
@@ -154,14 +151,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
             
             // Remove the metadata "comment" from the comments list
-            const filteredComments = firstPageComments.filter(
+            const filteredComments = allCommentsResult.comments.filter(
               c => c.userName !== "VIDEO_METADATA"
             );
+            
+            const totalCommentsWithoutMetadata = allCommentsResult.total - 
+              (allCommentsResult.comments.length - filteredComments.length);
             
             return res.json({
               ...responseData,
               comments: filteredComments,
-              hasMoreComments: filteredComments.length === 10 && firstPageComments.length > filteredComments.length
+              totalComments: totalCommentsWithoutMetadata
             });
           } catch (error) {
             console.error("Error parsing video metadata:", error);
@@ -172,8 +172,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Default response for regular searches or if metadata parsing fails
       return res.json({
         ...responseData,
-        comments: firstPageComments,
-        hasMoreComments: firstPageComments.length === 10
+        comments: allCommentsResult.comments,
+        totalComments: allCommentsResult.total
       });
     } catch (error) {
       console.error("Error in /api/analyze:", error);
@@ -181,22 +181,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get more comments for pagination
+  // Get ALL comments (no pagination)
   app.get("/api/comments", async (req, res) => {
     try {
       const queryId = parseInt(req.query.queryId as string);
-      const page = parseInt(req.query.page as string || "1");
-      const pageSize = parseInt(req.query.pageSize as string || "10");
       
       if (isNaN(queryId)) {
         return res.status(400).json({ message: "Valid queryId is required" });
       }
       
-      const comments = await storage.getCommentsBySearchQueryId(queryId, page, pageSize);
+      const allCommentsResult = await storage.getAllCommentsBySearchQueryId(queryId);
       
       return res.json({
-        comments,
-        hasMore: comments.length === pageSize
+        comments: allCommentsResult.comments,
+        total: allCommentsResult.total
       });
     } catch (error) {
       console.error("Error in /api/comments:", error);

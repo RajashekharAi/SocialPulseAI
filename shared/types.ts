@@ -22,6 +22,14 @@ export type Comment = {
   engagementScore?: number;
 };
 
+export type PaginatedComments = {
+  comments: Comment[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
 export type Influencer = {
   id?: number;
   name: string;

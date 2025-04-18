@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Comment } from "@shared/types";
@@ -8,11 +7,14 @@ import { Comment } from "@shared/types";
 type CommentsListProps = {
   comments: Comment[] | null;
   isLoading: boolean;
-  onLoadMore: () => void;
-  hasMore: boolean;
+  totalComments: number;
 };
 
-export default function CommentsList({ comments, isLoading, onLoadMore, hasMore }: CommentsListProps) {
+export default function CommentsList({ 
+  comments, 
+  isLoading,
+  totalComments
+}: CommentsListProps) {
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
   const [sortOrder, setSortOrder] = useState<string>("newest");
 
@@ -155,7 +157,7 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
   return (
     <Card className="bg-white rounded-lg shadow mb-6">
       <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-        <h3 className="font-medium">Comments</h3>
+        <h3 className="font-medium">Comments {totalComments > 0 ? `(${totalComments})` : ""}</h3>
         <div className="flex">
           <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
             <SelectTrigger className="text-sm border border-gray-200 rounded px-2 h-8 mr-2 w-36">
@@ -201,59 +203,55 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
             </>
           ) : sortedComments && sortedComments.length > 0 ? (
             <>
-              {sortedComments.map((comment, index) => (
-                <div
-                  key={index}
-                  className={`p-3 border border-gray-100 rounded-md hover:bg-gray-50 comment-box border-l-4 ${getBorderColor(
-                    comment.sentiment
-                  )}`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center">
-                      <div className="platform-icon bg-gray-100 rounded-full mr-2 w-5 h-5 flex items-center justify-center">
-                        {getPlatformIcon(comment.platform)}
-                      </div>
-                      <span className="font-medium text-sm">{sanitizeText(comment.userName)}</span>
-                      <span className="ml-2 text-xs text-gray-500">{sanitizeText(comment.platform)}</span>
-                      <span className="ml-2 text-xs px-1 bg-gray-100 rounded text-gray-600">{sanitizeText(comment.language)}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Badge
-                        variant={
-                          comment.sentiment.toLowerCase() === "positive"
-                            ? "positive"
-                            : comment.sentiment.toLowerCase() === "negative"
-                            ? "negative"
-                            : "neutral"
-                        }
-                        size="lg"
-                        className="mr-2"
-                      >
-                        {comment.sentiment}
-                      </Badge>
-                      <span className="text-xs text-gray-500">{formatTimeAgo(comment.timeAgo)}</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{renderTextWithLinks(comment.text)}</p>
-                  {comment.translation && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      <em>Translation: {renderTextWithLinks(comment.translation)}</em>
-                    </p>
-                  )}
-                </div>
-              ))}
+              <div>
+                <p className="text-sm text-gray-500 mb-3">
+                  Showing all {sortedComments.length} comments
+                </p>
+              </div>
               
-              {hasMore && (
-                <div className="mt-4 text-center">
-                  <Button 
-                    variant="outline" 
-                    onClick={onLoadMore}
-                    disabled={isLoading}
+              <div className="max-h-[600px] overflow-y-auto pr-2">
+                {sortedComments.map((comment, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 border border-gray-100 rounded-md hover:bg-gray-50 comment-box border-l-4 ${getBorderColor(
+                      comment.sentiment
+                    )} mb-3`}
                   >
-                    {isLoading ? "Loading..." : "Load More Comments"}
-                  </Button>
-                </div>
-              )}
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center">
+                        <div className="platform-icon bg-gray-100 rounded-full mr-2 w-5 h-5 flex items-center justify-center">
+                          {getPlatformIcon(comment.platform)}
+                        </div>
+                        <span className="font-medium text-sm">{sanitizeText(comment.userName)}</span>
+                        <span className="ml-2 text-xs text-gray-500">{sanitizeText(comment.platform)}</span>
+                        <span className="ml-2 text-xs px-1 bg-gray-100 rounded text-gray-600">{sanitizeText(comment.language)}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <Badge
+                          variant={
+                            comment.sentiment.toLowerCase() === "positive"
+                              ? "positive"
+                              : comment.sentiment.toLowerCase() === "negative"
+                              ? "negative"
+                              : "neutral"
+                          }
+                          size="lg"
+                          className="mr-2"
+                        >
+                          {comment.sentiment}
+                        </Badge>
+                        <span className="text-xs text-gray-500">{formatTimeAgo(comment.timeAgo)}</span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-line">{renderTextWithLinks(comment.text)}</p>
+                    {comment.translation && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        <em>Translation: {renderTextWithLinks(comment.translation)}</em>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </>
           ) : (
             <div className="text-center py-6">
