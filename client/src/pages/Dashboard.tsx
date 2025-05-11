@@ -28,7 +28,8 @@ export default function Dashboard() {
   const [searchParams, setSearchParams] = useState({
     keyword: "",
     timeperiod: "30",
-    platform: "all"
+    platform: "all",
+    isVideoTitleSearch: false
   });
   const [alertSettings, setAlertSettings] = useState({
     negativeSentimentSpike: true,
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [isReportGenerating, setIsReportGenerating] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const [queryTimestamp, setQueryTimestamp] = useState(Date.now());
   
   // Fetch data based on search params
   const { 
@@ -47,14 +49,16 @@ export default function Dashboard() {
     refetch, 
     isFetching 
   } = useQuery<SearchResult>({
-    queryKey: [`/api/analyze?keyword=${searchParams.keyword}&timeperiod=${searchParams.timeperiod}&platform=${searchParams.platform}&page=${commentPage}`],
+    queryKey: [`/api/analyze?keyword=${searchParams.keyword}&timeperiod=${searchParams.timeperiod}&platform=${searchParams.platform}&isVideoTitleSearch=${searchParams.isVideoTitleSearch}&page=${commentPage}&ts=${queryTimestamp}`],
     enabled: !!searchParams.keyword
   });
 
   // Handle search form submission
-  const handleSearch = (values: { keyword: string; timeperiod: string; platform: string }) => {
+  const handleSearch = (values: { keyword: string; timeperiod: string; platform: string; isVideoTitleSearch: boolean }) => {
     setCommentPage(1); // Reset to first page when new search is performed
     setSearchParams(values);
+    // Generate a new timestamp to force refetch even with the same parameters
+    setQueryTimestamp(Date.now());
   };
 
   // Handle refresh data
@@ -72,7 +76,7 @@ export default function Dashboard() {
     setAlertSettings(newAlerts as {
       negativeSentimentSpike: boolean;
       engagementVolume: boolean;
-      newTopicDetection: boolean;
+      newTopicDetection: boolean
     });
     
     // Save to server
@@ -527,23 +531,7 @@ export default function Dashboard() {
               </div>
               
               <div className="lg:col-span-3 flex items-end justify-end">
-                <div className="flex flex-col sm:flex-row items-center gap-2 w-full">
-                  <div className="text-sm text-gray-500 mb-2 sm:mb-0 text-center sm:text-left">
-                    Last updated: <span className="font-medium">{getLastUpdatedTime()}</span>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleRefresh}
-                    disabled={isFetching}
-                    className="w-full sm:w-auto"
-                  >
-                    <span className="material-icons text-sm mr-1">
-                      {isFetching ? "sync" : "refresh"}
-                    </span>
-                    Refresh
-                  </Button>
-                </div>
+                {/* Removed "Last updated" and refresh button */}
               </div>
             </div>
           </div>
@@ -642,7 +630,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <SentimentTrend 
               data={searchResults?.sentimentTrend || null} 
-              isLoading={isLoading} 
+              isLoading={isLoading}
+              timePeriod={searchParams.timeperiod}
             />
             <TopicDistribution 
               data={searchResults?.topicDistribution || null} 

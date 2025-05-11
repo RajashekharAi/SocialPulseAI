@@ -6,7 +6,7 @@ import {
   type InsertComment,
   type InsertUser
 } from "@shared/schema";
-import { SearchResult, Metrics, Influencer } from "@shared/types";
+import { SearchResult, Metrics, Influencer, PaginatedComments } from "@shared/types";
 
 // Interface for storage operations
 export interface IStorage {
@@ -30,7 +30,9 @@ export interface IStorage {
     searchQueryId: number, 
     page: number, 
     pageSize: number
-  ): Promise<Comment[]>;
+  ): Promise<PaginatedComments>;
+  getAllCommentsBySearchQueryId(searchQueryId: number): Promise<PaginatedComments>;
+  getTotalCommentCount(searchQueryId: number): Promise<number>;
   
   // API Configuration operations
   getApiKeys(): Promise<{ [key: string]: string | null }>;
@@ -200,16 +202,63 @@ export class MemStorage implements IStorage {
     this.comments.set(searchQueryId, storedComments);
   }
 
+  async getTotalCommentCount(searchQueryId: number): Promise<number> {
+    const allComments = this.comments.get(searchQueryId) || [];
+    
+    // Filter out metadata entries
+    const actualComments = allComments.filter(
+      comment => !comment.isVideoMetadata && !comment.isCommentMetric
+    );
+    
+    return actualComments.length;
+  }
+
   async getCommentsBySearchQueryId(
     searchQueryId: number,
     page: number,
     pageSize: number
-  ): Promise<Comment[]> {
+  ): Promise<PaginatedComments> {
     const allComments = this.comments.get(searchQueryId) || [];
+    
+    // Filter out metadata entries before pagination
+    const actualComments = allComments.filter(
+      comment => !comment.isVideoMetadata && !comment.isCommentMetric
+    );
+    
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
     
-    return allComments.slice(start, end);
+    // Calculate if there are more pages
+    const hasMore = actualComments.length > end;
+    
+    // Return paginated result with metadata
+    return {
+      comments: actualComments.slice(start, end),
+      total: actualComments.length,
+      page,
+      pageSize,
+      hasMore
+    };
+  }
+
+  async getAllCommentsBySearchQueryId(
+    searchQueryId: number
+  ): Promise<PaginatedComments> {
+    const allComments = this.comments.get(searchQueryId) || [];
+    
+    // Filter out metadata entries
+    const actualComments = allComments.filter(
+      comment => !comment.isVideoMetadata && !comment.isCommentMetric
+    );
+    
+    // Return all comments with metadata
+    return {
+      comments: actualComments,
+      total: actualComments.length,
+      page: 1,
+      pageSize: actualComments.length,
+      hasMore: false
+    };
   }
 
   // API Configuration operations
@@ -242,20 +291,26 @@ export class MemStorage implements IStorage {
       return this.generateMockAnalytics(searchQueryId);
     }
     
+    // Filter out metadata entries (video metadata and comment metrics)
+    const actualComments = allComments.filter(
+      comment => !comment.isVideoMetadata && !comment.isCommentMetric
+    );
+    
     // Calculate metrics using AI-driven approach
-    const totalComments = allComments.length;
-    const positiveSentiment = Math.round(
-      (allComments.filter(c => c.sentiment === "positive").length / totalComments) * 100
-    );
-    const negativeSentiment = Math.round(
-      (allComments.filter(c => c.sentiment === "negative").length / totalComments) * 100
-    );
+    const totalComments = actualComments.length;
+    
+    // Only calculate sentiment for actual comments
+    const positiveCount = actualComments.filter(c => c.sentiment === "positive").length;
+    const negativeCount = actualComments.filter(c => c.sentiment === "negative").length;
+    
+    const positiveSentiment = Math.round((positiveCount / totalComments) * 100);
+    const negativeSentiment = Math.round((negativeCount / totalComments) * 100);
     const neutralSentiment = 100 - positiveSentiment - negativeSentiment;
     
     // Calculate engagement rate with a more sophisticated algorithm
     // This considers comment volume, engagement scores, and sentiment distribution
-    const totalEngagement = allComments.reduce((sum, comment) => sum + (comment.engagementScore || 0), 0);
-    const avgEngagementPerComment = totalEngagement / totalComments;
+    const totalEngagement = actualComments.reduce((sum, comment) => sum + (comment.engagementScore || 0), 0);
+    const avgEngagementPerComment = totalComments > 0 ? totalEngagement / totalComments : 0;
     const engagementWeight = Math.min(totalComments / 100, 1); // Scale based on volume, max at 100 comments
     const sentimentBalance = (Math.abs(positiveSentiment - negativeSentiment) / 100) * 0.5; // Lower if balanced, higher if skewed
     
@@ -263,11 +318,11 @@ export class MemStorage implements IStorage {
     const rawEngagementRate = (avgEngagementPerComment * engagementWeight * (1 + sentimentBalance)) * 5;
     const engagementRate = Math.min(Math.round(rawEngagementRate * 100) / 100, 100); // Cap at 100, format to 2 decimal places
     
-    console.log(`AI-analyzed engagement rate: ${engagementRate}% based on ${totalComments} comments`);
+    console.log(`AI-analyzed engagement rate: ${engagementRate}% based on ${totalComments} actual comments`);
     
-    // Group comments by platform
+    // Group comments by platform (only count actual comments)
     const platformCounts: Record<string, number> = {};
-    allComments.forEach(comment => {
+    actualComments.forEach(comment => {
       platformCounts[comment.platform] = (platformCounts[comment.platform] || 0) + 1;
     });
     
@@ -285,9 +340,9 @@ export class MemStorage implements IStorage {
       color: platformColors[name] || "#9CA3AF"
     }));
     
-    // Extract topics
+    // Extract topics (only from actual comments)
     const topicCounts: Record<string, number> = {};
-    allComments.forEach(comment => {
+    actualComments.forEach(comment => {
       comment.topics?.forEach(topic => {
         topicCounts[topic] = (topicCounts[topic] || 0) + 1;
       });
@@ -316,19 +371,19 @@ export class MemStorage implements IStorage {
         color: topicColors[index % topicColors.length]
       }));
     
-    // Extract top keywords
-    const keywords = this.extractKeywords(allComments);
+    // Extract top keywords (only from actual comments)
+    const keywords = this.extractKeywords(actualComments);
     const topKeywords = keywords.slice(0, 30);
     
-    // Generate sentiment trend (30 days)
-    const sentimentTrend = this.generateSentimentTrend(allComments);
+    // Generate sentiment trend (30 days) (only from actual comments)
+    const sentimentTrend = this.generateSentimentTrend(actualComments);
     
-    // Find influential users
-    const influencers = this.findInfluencers(allComments);
+    // Find influential users (only from actual comments)
+    const influencers = this.findInfluencers(actualComments);
     
     // Generate AI insights
     const aiInsights = this.generateAIInsights(
-      allComments, 
+      actualComments, 
       positiveSentiment, 
       negativeSentiment, 
       topicDistribution,

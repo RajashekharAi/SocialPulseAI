@@ -7,6 +7,25 @@ type AIInsightsSummaryProps = {
 };
 
 export default function AIInsightsSummary({ summary, isLoading }: AIInsightsSummaryProps) {
+  // Sanitize text to remove HTML tags and invalid characters
+  const sanitizeText = (text: string | null): string => {
+    if (!text) return '';
+    
+    // Create a temporary div to decode HTML entities and strip HTML tags
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    
+    // Get text content (this removes all HTML tags)
+    let sanitizedText = tempDiv.textContent || '';
+    
+    // Replace invalid characters and control characters
+    return sanitizedText
+      // Remove control characters (except line breaks and tabs)
+      .replace(/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+      // Replace HTML entities that might have been missed
+      .replace(/&[^;]+;/g, ' ');
+  };
+
   return (
     <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-lg p-4 mb-6">
       <div className="flex items-start">
@@ -19,7 +38,7 @@ export default function AIInsightsSummary({ summary, isLoading }: AIInsightsSumm
             <div className="h-16 bg-blue-50 rounded animate-pulse"></div>
           ) : (
             <p className="text-gray-600">
-              {summary || 
+              {sanitizeText(summary) || 
                 "No AI insights available yet. Please run an analysis to generate insights."}
             </p>
           )}

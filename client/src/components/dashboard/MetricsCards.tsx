@@ -47,7 +47,6 @@ const MetricCard = ({
           </span>
           {Math.abs(change.value)}%
         </span>
-        <span className="ml-1 text-gray-500">vs last period</span>
       </div>
     </Card>
   );

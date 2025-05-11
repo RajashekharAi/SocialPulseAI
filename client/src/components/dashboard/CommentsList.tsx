@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Comment } from "@shared/types";
@@ -8,13 +7,16 @@ import { Comment } from "@shared/types";
 type CommentsListProps = {
   comments: Comment[] | null;
   isLoading: boolean;
-  onLoadMore: () => void;
-  hasMore: boolean;
+  totalComments: number;
 };
 
-export default function CommentsList({ comments, isLoading, onLoadMore, hasMore }: CommentsListProps) {
+export default function CommentsList({ 
+  comments, 
+  isLoading,
+  totalComments
+}: CommentsListProps) {
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
-  const [sortOrder, setSortOrder] = useState<string>("recent");
+  const [sortOrder, setSortOrder] = useState<string>("newest");
 
   // Apply filters to comments
   const filteredComments = comments 
@@ -29,11 +31,36 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
     if (sortOrder === "engaging" && a.engagementScore !== undefined && b.engagementScore !== undefined) {
       return b.engagementScore - a.engagementScore;
     }
+    if (sortOrder === "newest") {
+      // For newest first, sort by createdAt date (newer dates first)
+      // Add null checks before accessing timeAgo
+      if (!a.timeAgo && !b.timeAgo) return 0;
+      if (!a.timeAgo) return 1;  // a is undefined, so b comes first
+      if (!b.timeAgo) return -1; // b is undefined, so a comes first
+      
+      const dateA = new Date(a.timeAgo.replace("ago", "").trim());
+      const dateB = new Date(b.timeAgo.replace("ago", "").trim());
+      
+      // If we can't parse dates properly, fallback to string comparison
+      if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+        return a.timeAgo.localeCompare(b.timeAgo);
+      }
+      
+      return dateB.getTime() - dateA.getTime();
+    }
     // Default to recent sorting with null/undefined check
     if (!a.timeAgo) return 1;
     if (!b.timeAgo) return -1;
     return a.timeAgo.localeCompare(b.timeAgo);
   });
+
+  // Format time ago string from timestamp or date string
+  const formatTimeAgo = (timeAgo: string | undefined): string => {
+    if (timeAgo) return timeAgo;
+    
+    // If timeAgo is not available, return an empty string
+    return "";
+  };
 
   // Get border color based on sentiment
   const getBorderColor = (sentiment: string) => {
@@ -65,19 +92,37 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
     }
   };
   
-  // Safely handle HTML content and render links as clickable
-  const sanitizeText = (text: string): React.ReactNode => {
+  // Safely handle text content and sanitize HTML tags and invalid characters
+  const sanitizeText = (text: string): string => {
     if (!text) return '';
     
-    // First, let's create a temporary div to decode HTML entities
-    const decodedText = document.createElement('div');
-    decodedText.innerHTML = text;
-    const textContent = decodedText.textContent || '';
+    // Create a temporary div to decode HTML entities and strip HTML tags
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    
+    // Get text content (this removes all HTML tags)
+    let sanitizedText = tempDiv.textContent || '';
+    
+    // Replace invalid characters and control characters
+    sanitizedText = sanitizedText
+      // Remove control characters (except line breaks and tabs)
+      .replace(/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+      // Replace HTML entities that might have been missed
+      .replace(/&[^;]+;/g, ' ');
+      
+    return sanitizedText;
+  };
+  
+  // Function to render text with clickable links but no HTML tags
+  const renderTextWithLinks = (text: string): React.ReactNode => {
+    if (!text) return '';
+    
+    // First sanitize the text
+    const sanitizedText = sanitizeText(text);
     
     // Now handle links and line breaks
-    // Split by the standard link pattern
     const linkPattern = /(https?:\/\/[^\s]+)/g;
-    const parts = textContent.split(linkPattern);
+    const parts = sanitizedText.split(linkPattern);
     
     return (
       <>
@@ -112,7 +157,7 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
   return (
     <Card className="bg-white rounded-lg shadow mb-6">
       <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-        <h3 className="font-medium">Comments</h3>
+        <h3 className="font-medium">Comments {totalComments > 0 ? `(${totalComments})` : ""}</h3>
         <div className="flex">
           <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
             <SelectTrigger className="text-sm border border-gray-200 rounded px-2 h-8 mr-2 w-36">
@@ -131,6 +176,7 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
               <SelectItem value="recent">Recent First</SelectItem>
               <SelectItem value="engaging">Most Engaging</SelectItem>
             </SelectContent>
@@ -157,59 +203,55 @@ export default function CommentsList({ comments, isLoading, onLoadMore, hasMore 
             </>
           ) : sortedComments && sortedComments.length > 0 ? (
             <>
-              {sortedComments.map((comment, index) => (
-                <div
-                  key={index}
-                  className={`p-3 border border-gray-100 rounded-md hover:bg-gray-50 comment-box border-l-4 ${getBorderColor(
-                    comment.sentiment
-                  )}`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center">
-                      <div className="platform-icon bg-gray-100 rounded-full mr-2 w-5 h-5 flex items-center justify-center">
-                        {getPlatformIcon(comment.platform)}
-                      </div>
-                      <span className="font-medium text-sm">{sanitizeText(comment.userName)}</span>
-                      <span className="ml-2 text-xs text-gray-500">{sanitizeText(comment.platform)}</span>
-                      <span className="ml-2 text-xs px-1 bg-gray-100 rounded text-gray-600">{sanitizeText(comment.language)}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Badge
-                        variant={
-                          comment.sentiment.toLowerCase() === "positive"
-                            ? "positive"
-                            : comment.sentiment.toLowerCase() === "negative"
-                            ? "negative"
-                            : "neutral"
-                        }
-                        size="lg"
-                        className="mr-2"
-                      >
-                        {comment.sentiment}
-                      </Badge>
-                      <span className="text-xs text-gray-500">{comment.timeAgo || "Unknown time"}</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-line">{sanitizeText(comment.text)}</p>
-                  {comment.translation && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      <em>Translation: {sanitizeText(comment.translation)}</em>
-                    </p>
-                  )}
-                </div>
-              ))}
+              <div>
+                <p className="text-sm text-gray-500 mb-3">
+                  Showing all {sortedComments.length} comments
+                </p>
+              </div>
               
-              {hasMore && (
-                <div className="mt-4 text-center">
-                  <Button 
-                    variant="outline" 
-                    onClick={onLoadMore}
-                    disabled={isLoading}
+              <div className="max-h-[600px] overflow-y-auto pr-2">
+                {sortedComments.map((comment, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 border border-gray-100 rounded-md hover:bg-gray-50 comment-box border-l-4 ${getBorderColor(
+                      comment.sentiment
+                    )} mb-3`}
                   >
-                    {isLoading ? "Loading..." : "Load More Comments"}
-                  </Button>
-                </div>
-              )}
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center">
+                        <div className="platform-icon bg-gray-100 rounded-full mr-2 w-5 h-5 flex items-center justify-center">
+                          {getPlatformIcon(comment.platform)}
+                        </div>
+                        <span className="font-medium text-sm">{sanitizeText(comment.userName)}</span>
+                        <span className="ml-2 text-xs text-gray-500">{sanitizeText(comment.platform)}</span>
+                        <span className="ml-2 text-xs px-1 bg-gray-100 rounded text-gray-600">{sanitizeText(comment.language)}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <Badge
+                          variant={
+                            comment.sentiment.toLowerCase() === "positive"
+                              ? "positive"
+                              : comment.sentiment.toLowerCase() === "negative"
+                              ? "negative"
+                              : "neutral"
+                          }
+                          size="lg"
+                          className="mr-2"
+                        >
+                          {comment.sentiment}
+                        </Badge>
+                        <span className="text-xs text-gray-500">{formatTimeAgo(comment.timeAgo)}</span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-line">{renderTextWithLinks(comment.text)}</p>
+                    {comment.translation && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        <em>Translation: {renderTextWithLinks(comment.translation)}</em>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </>
           ) : (
             <div className="text-center py-6">

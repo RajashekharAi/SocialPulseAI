@@ -1,5 +1,13 @@
 // Types for the frontend
 
+import { InsertComment } from "./schema";
+
+// Extended Comment type with metadata properties
+export interface ExtendedComment extends InsertComment {
+  isVideoMetadata?: boolean;
+  isCommentMetric?: boolean;
+}
+
 export type Comment = {
   id: number;
   platform: string;
@@ -12,6 +20,14 @@ export type Comment = {
   topics: string[];
   timeAgo: string;
   engagementScore?: number;
+};
+
+export type PaginatedComments = {
+  comments: Comment[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
 };
 
 export type Influencer = {
